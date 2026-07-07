@@ -1,5 +1,7 @@
 # AI Chat Bot
 
+[![CI](https://github.com/prasad91/ai-chat-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/prasad91/ai-chat-bot/actions/workflows/ci.yml)
+
 Spring Boot chat application backed by the Claude API.
 
 ## Tech Stack
@@ -56,6 +58,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 ./gradlew test
 ```
+
+- `ChatControllerTests` — fast, network-free; the `AnthropicClient` bean is replaced with a Mockito mock, so these always run (including in CI) without needing `ANTHROPIC_API_KEY`.
+- `ChatControllerLiveApiTests` — opt-in integration test that calls the real Claude API. Only runs when `ANTHROPIC_API_KEY` is set (and the account has credits); skipped otherwise.
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `./gradlew build` on every push/PR to `main` via GitHub Actions — no secrets configured, so the live test is always skipped there by design.
 
 ## API Endpoints
 
