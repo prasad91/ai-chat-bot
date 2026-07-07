@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>AI Chat Bot</title>
+	<link rel="stylesheet" href="/css/chat.css" />
+</head>
+<body>
+	<div class="app-shell">
+		<aside class="sidebar" id="sidebar">
+			<div class="sidebar-header">
+				<button id="new-chat-btn" class="new-chat-btn" type="button">+ New Chat</button>
+			</div>
+			<nav id="conversation-list" class="conversation-list" aria-label="Conversations"></nav>
+		</aside>
+
+		<div class="chat-app">
+			<header class="chat-header">
+				<div class="chat-header-title">
+					<button id="sidebar-toggle" class="icon-btn sidebar-toggle-btn" type="button" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
+					<span class="bot-avatar" aria-hidden="true">🤖</span>
+					<h1 id="chat-title">AI Chat Bot</h1>
+				</div>
+				<div class="chat-header-actions">
+					<button id="delete-chat-btn" class="icon-btn" type="button" title="Delete this chat" aria-label="Delete this chat">🗑</button>
+					<button id="theme-toggle" class="icon-btn" type="button" title="Toggle theme" aria-label="Toggle theme">🌙</button>
+				</div>
+			</header>
+
+			<main id="messages" class="chat-messages" aria-live="polite"></main>
+
+			<div id="typing-indicator" class="typing-indicator hidden" aria-hidden="true">
+				<span></span><span></span><span></span>
+			</div>
+
+			<form id="chat-form" class="chat-input-area">
+				<textarea id="chat-input" placeholder="Type a message..." rows="1" autocomplete="off"></textarea>
+				<button type="submit" id="send-btn" class="send-btn" title="Send" aria-label="Send message">➤</button>
+			</form>
+		</div>
+	</div>
+
+	<div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+
+	<script src="/js/chat.js"></script>
+</body>
+</html>
