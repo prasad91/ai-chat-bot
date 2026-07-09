@@ -2,9 +2,14 @@ package com.example.aichatbot.controller;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.errors.AnthropicServiceException;
+import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.Model;
+import com.anthropic.models.messages.TextBlockParam;
+import com.example.aichatbot.document.DocumentContentBlocks;
+import com.example.aichatbot.document.DocumentStore;
+import com.example.aichatbot.document.StoredDocument;
 import com.example.aichatbot.dto.ChatMessage;
 import com.example.aichatbot.dto.ChatRequest;
 import com.example.aichatbot.dto.ChatResponse;
@@ -29,9 +34,11 @@ public class ChatController {
 	private static final long MAX_RESPONSE_TOKENS = 1024L;
 
 	private final AnthropicClient anthropicClient;
+	private final DocumentStore documentStore;
 
-	public ChatController(AnthropicClient anthropicClient) {
+	public ChatController(AnthropicClient anthropicClient, DocumentStore documentStore) {
 		this.anthropicClient = anthropicClient;
+		this.documentStore = documentStore;
 	}
 
 	@PostMapping
@@ -45,13 +52,24 @@ public class ChatController {
 			return new ChatResponse("Say something and I'll respond!", Instant.now().toString());
 		}
 
+		StoredDocument document = request.documentId() != null && !request.documentId().isBlank()
+				? documentStore.get(request.documentId())
+				: null;
+
 		MessageCreateParams.Builder paramsBuilder = MessageCreateParams.builder()
 				.model(Model.CLAUDE_OPUS_4_8)
 				.maxTokens(MAX_RESPONSE_TOKENS);
 
+		boolean documentAttached = false;
 		for (ChatMessage turn : turns) {
-			if ("assistant".equalsIgnoreCase(turn.role())) {
+			boolean isAssistant = "assistant".equalsIgnoreCase(turn.role());
+			if (isAssistant) {
 				paramsBuilder.addAssistantMessage(turn.content());
+			} else if (document != null && !documentAttached) {
+				paramsBuilder.addUserMessageOfBlockParams(List.of(
+						DocumentContentBlocks.build(document),
+						ContentBlockParam.ofText(TextBlockParam.builder().text(turn.content()).build())));
+				documentAttached = true;
 			} else {
 				paramsBuilder.addUserMessage(turn.content());
 			}

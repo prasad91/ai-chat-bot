@@ -28,6 +28,11 @@
 				</div>
 			</header>
 
+			<div id="document-banner" class="document-banner hidden">
+				<span id="document-banner-text"></span>
+				<button type="button" id="document-remove-btn" class="document-banner-remove" title="Remove document" aria-label="Remove document">✕</button>
+			</div>
+
 			<main id="messages" class="chat-messages" aria-live="polite"></main>
 
 			<div id="typing-indicator" class="typing-indicator hidden" aria-hidden="true">
@@ -35,6 +40,9 @@
 			</div>
 
 			<form id="chat-form" class="chat-input-area">
+				<button type="button" id="attach-btn" class="icon-btn attach-btn" title="Attach document (PDF, .txt, .md)" aria-label="Attach document">📎</button>
+				<input type="file" id="file-input" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden />
+				<button type="button" id="attach-url-btn" class="icon-btn attach-btn" title="Attach document from a URL" aria-label="Attach document from a URL">🔗</button>
 				<textarea id="chat-input" placeholder="Type a message..." rows="1" autocomplete="off"></textarea>
 				<button type="submit" id="send-btn" class="send-btn" title="Send" aria-label="Send message">➤</button>
 			</form>

@@ -1,10 +1,13 @@
 (function () {
 	const CHAT_ENDPOINT = "/api/chat";
+	const DOCUMENTS_ENDPOINT = "/api/documents";
 	const THEME_STORAGE_KEY = "aichatbot.theme";
 	const CONVERSATIONS_STORAGE_KEY = "aichatbot.conversations";
 	const ACTIVE_ID_STORAGE_KEY = "aichatbot.activeConversationId";
 	const WELCOME_MESSAGE = "Hi! I'm Claude. Ask me anything.";
 	const DEFAULT_TITLE = "New chat";
+	const ALLOWED_DOCUMENT_EXTENSIONS = [".pdf", ".txt", ".md"];
+	const MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024;
 
 	const messagesEl = document.getElementById("messages");
 	const typingIndicatorEl = document.getElementById("typing-indicator");
@@ -19,6 +22,12 @@
 	const sidebarEl = document.getElementById("sidebar");
 	const sidebarToggleBtn = document.getElementById("sidebar-toggle");
 	const sidebarBackdropEl = document.getElementById("sidebar-backdrop");
+	const attachBtn = document.getElementById("attach-btn");
+	const fileInputEl = document.getElementById("file-input");
+	const attachUrlBtn = document.getElementById("attach-url-btn");
+	const documentBannerEl = document.getElementById("document-banner");
+	const documentBannerTextEl = document.getElementById("document-banner-text");
+	const documentRemoveBtn = document.getElementById("document-remove-btn");
 
 	let conversations = [];
 	let activeId = null;
@@ -32,7 +41,15 @@
 
 	function createConversation() {
 		const now = Date.now();
-		return { id: generateId(), title: DEFAULT_TITLE, messages: [], createdAt: now, updatedAt: now };
+		return {
+			id: generateId(),
+			title: DEFAULT_TITLE,
+			messages: [],
+			createdAt: now,
+			updatedAt: now,
+			documentId: null,
+			documentName: null
+		};
 	}
 
 	function loadState() {
@@ -170,6 +187,16 @@
 		chatTitleEl.textContent = conv ? conv.title : "AI Chat Bot";
 	}
 
+	function renderDocumentBanner() {
+		const conv = getActiveConversation();
+		if (conv && conv.documentId) {
+			documentBannerTextEl.textContent = "📄 " + conv.documentName;
+			documentBannerEl.classList.remove("hidden");
+		} else {
+			documentBannerEl.classList.add("hidden");
+		}
+	}
+
 	function switchConversation(id) {
 		if (id === activeId) {
 			closeSidebarOnMobile();
@@ -180,6 +207,7 @@
 		renderMessages();
 		renderSidebar();
 		renderActiveTitle();
+		renderDocumentBanner();
 		closeSidebarOnMobile();
 		inputEl.focus();
 	}
@@ -192,6 +220,7 @@
 		renderMessages();
 		renderSidebar();
 		renderActiveTitle();
+		renderDocumentBanner();
 		closeSidebarOnMobile();
 		inputEl.focus();
 	}
@@ -211,6 +240,7 @@
 		renderMessages();
 		renderSidebar();
 		renderActiveTitle();
+		renderDocumentBanner();
 	}
 
 	function setTyping(visible) {
@@ -250,7 +280,8 @@
 				body: JSON.stringify({
 					messages: conv.messages.map(function (m) {
 						return { role: m.role, content: m.content };
-					})
+					}),
+					documentId: conv.documentId || null
 				})
 			});
 
@@ -266,6 +297,110 @@
 			appendMessage("bot", data.reply, new Date(replyTime));
 		} catch (err) {
 			appendMessage("bot", "Sorry, something went wrong reaching the server.", new Date());
+			console.error(err);
+		} finally {
+			setTyping(false);
+			setSending(false);
+			inputEl.focus();
+		}
+	}
+
+	function confirmReplaceIfNeeded(newLabel) {
+		const conv = getActiveConversation();
+		if (conv.documentId) {
+			return confirm("Replace the current attached document (\"" + conv.documentName + "\") with " + newLabel + "?");
+		}
+		return true;
+	}
+
+	function applyDocumentResult(data, sourceLabel) {
+		const conv = getActiveConversation();
+		conv.documentId = data.documentId;
+		conv.documentName = data.filename;
+
+		const now = Date.now();
+		conv.messages.push({ role: "user", content: sourceLabel + data.filename, timestamp: now });
+		conv.messages.push({ role: "assistant", content: data.summary, timestamp: now + 1 });
+		if (conv.title === DEFAULT_TITLE) {
+			conv.title = truncate(data.filename, 32);
+		}
+		conv.updatedAt = now;
+		moveToFront(conv.id);
+		saveState();
+
+		renderMessages();
+		renderSidebar();
+		renderActiveTitle();
+		renderDocumentBanner();
+	}
+
+	async function uploadDocument(file) {
+		const lowerName = file.name.toLowerCase();
+		const hasAllowedExtension = ALLOWED_DOCUMENT_EXTENSIONS.some(function (ext) {
+			return lowerName.endsWith(ext);
+		});
+		if (!hasAllowedExtension) {
+			alert("Please upload a PDF, .txt, or .md file.");
+			return;
+		}
+		if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+			alert("File is too large. Max size is 15MB.");
+			return;
+		}
+		if (!confirmReplaceIfNeeded("\"" + file.name + "\"")) {
+			return;
+		}
+
+		setTyping(true);
+		setSending(true);
+
+		try {
+			const formData = new FormData();
+			formData.append("file", file);
+
+			const res = await fetch(DOCUMENTS_ENDPOINT, { method: "POST", body: formData });
+
+			if (!res.ok) {
+				const message = await res.text();
+				throw new Error(message || ("Upload failed with status " + res.status));
+			}
+
+			const data = await res.json();
+			applyDocumentResult(data, "📄 Uploaded document: ");
+		} catch (err) {
+			appendMessage("bot", "Sorry, I couldn't process that document. " + err.message, new Date());
+			console.error(err);
+		} finally {
+			setTyping(false);
+			setSending(false);
+			inputEl.focus();
+		}
+	}
+
+	async function uploadDocumentFromUrl(url) {
+		if (!confirmReplaceIfNeeded("this URL")) {
+			return;
+		}
+
+		setTyping(true);
+		setSending(true);
+
+		try {
+			const res = await fetch(DOCUMENTS_ENDPOINT + "/url", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ url: url })
+			});
+
+			if (!res.ok) {
+				const message = await res.text();
+				throw new Error(message || ("Fetching that URL failed with status " + res.status));
+			}
+
+			const data = await res.json();
+			applyDocumentResult(data, "🔗 Attached from URL: ");
+		} catch (err) {
+			appendMessage("bot", "Sorry, I couldn't process that URL. " + err.message, new Date());
 			console.error(err);
 		} finally {
 			setTyping(false);
@@ -354,10 +489,40 @@
 
 	sidebarBackdropEl.addEventListener("click", closeSidebar);
 
+	attachBtn.addEventListener("click", function () {
+		fileInputEl.click();
+	});
+
+	fileInputEl.addEventListener("change", function () {
+		const file = fileInputEl.files[0];
+		fileInputEl.value = "";
+		if (file) {
+			uploadDocument(file);
+		}
+	});
+
+	attachUrlBtn.addEventListener("click", function () {
+		const url = prompt("Paste a URL to a PDF or webpage:");
+		if (url && url.trim()) {
+			uploadDocumentFromUrl(url.trim());
+		}
+	});
+
+	documentRemoveBtn.addEventListener("click", function () {
+		const conv = getActiveConversation();
+		if (conv && conv.documentId && confirm("Remove the attached document from this chat? Prior messages stay in history.")) {
+			conv.documentId = null;
+			conv.documentName = null;
+			saveState();
+			renderDocumentBanner();
+		}
+	});
+
 	initTheme();
 	loadState();
 	renderMessages();
 	renderSidebar();
 	renderActiveTitle();
+	renderDocumentBanner();
 	inputEl.focus();
 })();
